@@ -76,6 +76,7 @@ const ConversationPage = () => {
                                     <SelectItem value="GPT-4o-mini">GPT-4o-mini</SelectItem>
                                     <SelectItem value="Gemini">Gemini</SelectItem>
                                     <SelectItem value="Gork">Grok</SelectItem>
+                                    <SelectItem value="Claude">Claude</SelectItem>
                                     <SelectItem value="LLama">LLama</SelectItem>
                                 </SelectContent>
                             </Select>
