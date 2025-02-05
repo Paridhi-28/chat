@@ -6,7 +6,7 @@ const LandingLayout = ({
     }) => {
     return (
         <main className="h-full bg-[#111827] overflow-auto">
-            <div className="max-auto max-w-screen-xl h-full w-full">
+            <div className="max-auto max-w-screen-3xl h-full w-full">
                 {children}
             </div>
         </main>
