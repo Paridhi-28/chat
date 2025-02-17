@@ -2,97 +2,128 @@
 
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-
 import { Heading } from "@/components/heading";
 import { MessagesSquareIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { formSchema } from "./constant";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useRef, useState, useEffect } from "react";
+import { motion } from "framer-motion";
+
+// Form Schema (Ensures input isn't empty)
+const formSchema = z.object({
+  prompt: z.string().min(1, "Message cannot be empty"),
+});
+
+// Fixed AI Response
+const FIXED_RESPONSE = "This is a fixed response with a typing effect!";
 
 const ConversationPage = () => {
+  const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [typingText, setTypingText] = useState<string>("");
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: { prompt: "" },
+  });
 
-    const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            prompt: ""
-        }
-    });
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-    const isLoading = form.formState.isSubmitting;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typingText]);
 
-    const onSubmit = async (values: z.infer<typeof formSchema>) => {
-        console.log(values)
-    }
+  const simulateTyping = (text: string) => {
+    setTypingText("");
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < text.length) {
+        setTypingText((prev) => prev + text[i]);
+        i++;
+      } else {
+        clearInterval(interval);
+        setMessages((prev) => [...prev, { role: "ai", content: text }]);
+        setTypingText("");
+      }
+    }, 50); // Adjust speed here (milliseconds per letter)
+  };
 
-    return (
-        <div>
-            <Heading
-                title="Conversation"
-                description="Our most advanced Conversation model. "
-                icon={MessagesSquareIcon}
-                iconColor="text-violet-500"
-                bgColor="bg-violet-500/10"
-            />
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    setMessages((prev) => [...prev, { role: "user", content: values.prompt }]);
+    simulateTyping(FIXED_RESPONSE);
+    form.reset();
+  };
 
-            <div className="px-4 lg:px-8">
-                <div>
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)}
-                            className="
-                            rounded-lg
-                            border
-                            w-full
-                            p-4
-                            px-3
-                            md:px-6
-                            focus-within:shadow-sm
-                            grid 
-                            grid-cols-12
-                            gap-2
-                            ">
-                            <FormField
-                                name="prompt"
-                                render={({ field }) => (
-                                    <FormItem className="col-span-12 lg:col-span-10">
-                                        <FormControl className="m-0 p-0">
-                                            <Input
-                                                className="border-0 outline-none focus-visible:ring-0 focus-visible:ring-transparent"
-                                                disabled={isLoading}
-                                                placeholder="How do I calculate the radius of a circle?"
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                )} />
-                            <Select>
-                                <SelectTrigger className="col-span-12 lg:col-span-1 w-full">
-                                    <SelectValue placeholder="Model" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="GPT-4o">GPT-4o</SelectItem>
-                                    <SelectItem value="GPT-4o-mini">GPT-4o-mini</SelectItem>
-                                    <SelectItem value="Gemini">Gemini</SelectItem>
-                                    <SelectItem value="Gork">Grok</SelectItem>
-                                    <SelectItem value="Claude">Claude</SelectItem>
-                                    <SelectItem value="LLama">LLama</SelectItem>
-                                </SelectContent>
-                            </Select>
+  return (
+    <div className="flex flex-col h-screen">
+      {/* Header */}
+      <Heading
+        title="Conversation"
+        description="A simple AI chat with typing effect."
+        icon={MessagesSquareIcon}
+        iconColor="text-violet-500"
+        bgColor="bg-violet-500/10"
+      />
 
-                            <Button className="col-span-12 lg:col-span-1 w-full" disabled={isLoading}>
-                                Generate
-                            </Button>
-                        </form>
-                    </Form>
-                </div>
-                <div className="space-y-4 mt-4">
-                    Messages Content
-                </div>
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`p-3 ${
+                message.role === "user"
+                  ? "bg-transparent text-black border-b border-gray-400 shadow-md w-[40%]"
+                  : "text-black w-[60%]"
+              }`}
+            >
+              {message.content}
             </div>
-        </div>
-    );
-}
+          </motion.div>
+        ))}
+        {/* Typing Effect */}
+        {typingText && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="flex justify-start"
+          >
+            <div className="text-black w-[60%]">{typingText}</div>
+          </motion.div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Bar (Adjusted height to stay visible) */}
+      <div className="p-3 border-t bg-white sticky bottom-0">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-2 items-center">
+            <FormField
+              name="prompt"
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormControl>
+                    <Input
+                      className="border rounded-lg px-4 py-2 focus:ring-0"
+                      placeholder="Type your message..."
+                      {...field}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="px-6">Send</Button>
+          </form>
+        </Form>
+      </div>
+    </div>
+  );
+};
 
 export default ConversationPage;
