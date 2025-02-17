@@ -23,7 +23,7 @@ An advanced AI-powered SaaS platform that integrates multiple AI models (GPT ver
 
 ### Steps  
 ```sh
-git clone https://github.com/your-username/your-repo.git  
-cd your-repo  
+git clone https://github.com/Paridhi-28/chat.git  
+cd chat  
 npm install  
 npm run dev  
