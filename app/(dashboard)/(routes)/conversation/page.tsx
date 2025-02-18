@@ -33,7 +33,10 @@ const ConversationPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingText]);
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const simulateTyping = (text: string) => {
+    setIsLoading(true); // Set loading state to true
     setTypingText("");
     let i = 0;
     const interval = setInterval(() => {
@@ -44,9 +47,11 @@ const ConversationPage = () => {
         clearInterval(interval);
         setMessages((prev) => [...prev, { role: "ai", content: text }]);
         setTypingText("");
+        setIsLoading(false); // Set loading state to false when finished
       }
-    }, 50); // Adjust speed here (milliseconds per letter)
+    }, 50);
   };
+
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     setMessages((prev) => [...prev, { role: "user", content: values.prompt }]);
@@ -87,15 +92,15 @@ const ConversationPage = () => {
           </motion.div>
         ))}
         {/* Typing Effect */}
-        {typingText && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="flex justify-start"
-          >
-            <div className="text-black w-[60%]">{typingText}</div>
-          </motion.div>
+        {isLoading && (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="flex justify-start"
+            >
+              <div className="text-black w-[60%]">AI is typing...</div>
+            </motion.div>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -118,7 +123,7 @@ const ConversationPage = () => {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="px-6">Send</Button>
+            <Button type="submit" className="px-6" disabled={isLoading}>Send</Button>
           </form>
         </Form>
       </div>
