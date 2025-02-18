@@ -38,6 +38,7 @@ next-env.d.ts
 
 # jettbrains
 *.idea
+/.idea/
 
 # python environment
 /ChatBot_v1/chatbot
