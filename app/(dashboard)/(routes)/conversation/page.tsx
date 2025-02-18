@@ -18,9 +18,19 @@ const formSchema = z.object({
 
 // Fixed AI Response
 const FIXED_RESPONSE = "This is a fixed response with a typing effect!";
+const display_name_of_role = "role";
+const display_name_of_role_user = "user";
+const display_name_of_role_ai = "ai";
+const display_name_of_content = "content";
+
+// Type definition using the constants
+type Message = {
+  [display_name_of_role]: typeof display_name_of_role_user | typeof display_name_of_role_ai;
+  [display_name_of_content]: string;
+};
 
 const ConversationPage = () => {
-  const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [typingText, setTypingText] = useState<string>("");
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -37,21 +47,19 @@ const ConversationPage = () => {
 
   const simulateTyping = (text: string) => {
     setIsLoading(true); // Set loading state to true
-    setTypingText("");
     let i = 0;
     const interval = setInterval(() => {
-      if (i < text.length) {
-        setTypingText((prev) => prev + text[i]);
-        i++;
-      } else {
+      setTypingText(text.slice(0, i + 1) + "..."); // Add "..." as suffix progressively
+      i++;
+
+      if (i >= text.length) {
         clearInterval(interval);
         setMessages((prev) => [...prev, { role: "ai", content: text }]);
-        setTypingText("");
+        setTypingText(""); // Clear typing effect when finished
         setIsLoading(false); // Set loading state to false when finished
       }
-    }, 50);
+    }, 50); // Adjust typing speed here (milliseconds per letter)
   };
-
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     setMessages((prev) => [...prev, { role: "user", content: values.prompt }]);
@@ -92,15 +100,15 @@ const ConversationPage = () => {
           </motion.div>
         ))}
         {/* Typing Effect */}
-        {isLoading && (
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-                className="flex justify-start"
-            >
-              <div className="text-black w-[60%]">AI is typing...</div>
-            </motion.div>
+        {typingText && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="flex justify-start"
+          >
+            <div className="text-black w-[60%]">{typingText}</div>
+          </motion.div>
         )}
         <div ref={messagesEndRef} />
       </div>
