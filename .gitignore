@@ -35,3 +35,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# jettbrains
+*.idea
+
+# python environment
+/ChatBot_v1/chatbot
