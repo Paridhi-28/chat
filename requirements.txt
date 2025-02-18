@@ -1,0 +1,8 @@
+openai
+anthropic
+requests
+google-generativeai
+python-dotenv
+python-socketio[client]
+websocket-client
+python-socketio
