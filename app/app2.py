@@ -3,7 +3,9 @@ import socketio
 import openai
 import os
 import sys
+from dotenv import load_dotenv
 
+load_dotenv()
 # Ensure your API key is set in the environment!
 openai.api_key = os.getenv('OPENAI_API_KEY')
 if openai.api_key is None:

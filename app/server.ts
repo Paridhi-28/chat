@@ -58,7 +58,7 @@ server.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
 
     // Spawn the Python process.
-    const pythonProcess = spawn('C:\\Users\\acer\\Documents\\Programming\\Python\\Chatbot\\ChatBot\\Scripts\\python.exe', ['app2.py']); // adjust the path and command if necessary
+    const pythonProcess = spawn('C:\\Users\\acer\\Documents\\Programming\\Python\\Chatbot\\ChatBot\\Scripts\\python.exe', ['app/app2.py']); // adjust the path and command if necessary
 
     pythonProcess.stdout.on('data', (data: Buffer) => {
         console.log("Python stdout:", data.toString());

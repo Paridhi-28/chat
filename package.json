@@ -6,7 +6,7 @@
     "build": "concurrently \"tsc\" \"next build\"",
     "start": "next start",
     "lint": "next lint",
-    "server": "node dist/app/server.js",
+    "server": "node app/server.ts",
     "dev:backend": "npm run build && npm run server",
     "dev:next": "next dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:next\""
