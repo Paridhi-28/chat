@@ -1,47 +1,42 @@
 import { useEffect, useState } from "react";
-import io from "socket.io-client"; // default import, not named
+        import io from "socket.io-client";
 
-const display_name_of_role = "role";
-const display_name_of_role_user = "user";
-const display_name_of_role_ai = "assistant";
-const display_name_of_content = "content";
+        export const useChatSocket = <Message>(
+            display_name_of_role: string,
+            display_name_of_role_user: string,
+            display_name_of_role_ai: string,
+            display_name_of_content: string
+        ) => {
+            const [socket, setSocket] = useState<any>(null);
+            const [messages, setMessages] = useState<Message[]>([]);
 
-// Local message type matching your naming
-export type Message = {
-    [display_name_of_role]: typeof display_name_of_role_user | typeof display_name_of_role_ai;
-    [display_name_of_content]: string;
-};
+            useEffect(() => {
+                const socketIo = io("http://localhost:5000");
 
-export const useChatSocket = () =>
-{
-    const [socket, setSocket] = useState<any>(null);
-    const [messages, setMessages] = useState<Message[]>([]);
+                socketIo.on("connect", () => {
+                    console.log("Connected to chat server.");
+                    socketIo.emit("set_format", {
+                        role: display_name_of_role,
+                        user: display_name_of_role_user,
+                        assistant: display_name_of_role_ai,
+                        content: display_name_of_content
+                    });
+                });
 
-    useEffect(() =>
-    {
-        // Connect to your server on port 5000
-        const socketIo = io("http://localhost:5000");
+                socketIo.on("messages", (data: Message[]) => {
+                    setMessages(data);
+                });
 
-        socketIo.on("connect", () => {
-            console.log("Connected to chat server.");
-        });
+                setSocket(socketIo);
 
-        // Whenever the server emits the full conversation, update local state
-        socketIo.on("messages", (data: Message[]) => {
-            setMessages(data);
-        });
+                return () => {
+                    socketIo.disconnect();
+                };
+            }, [display_name_of_role, display_name_of_role_user, display_name_of_role_ai, display_name_of_content]);
 
-        setSocket(socketIo);
+            const sendMessage = (msg: string) => {
+                socket?.emit("line", msg);
+            };
 
-        return () => {
-            socketIo.disconnect();
+            return { messages, sendMessage };
         };
-    }, []);
-
-    // Send user message to the server
-    const sendMessage = (msg: string) => {
-        socket?.emit("line", msg);
-    };
-
-    return { messages, sendMessage };
-};

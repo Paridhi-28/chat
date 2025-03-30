@@ -8,29 +8,42 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useChatSocket } from "@/app/hooks/useChatSocket";
-import { useTypingEffect } from "@/app/hooks/useTypingEffect";
 
-// Role and content variable names (allowing dynamic naming)
+// Import custom hooks
+import { useTypingEffect } from "./customHooks/useTypingEffect";
+import { useMessageEditing } from "./customHooks/useMessageEditing";
+import { useMessageSubmit } from "./customHooks/useMessageSubmit";
+import { useProcessSocketMessages } from "./customHooks/useProcessSocketMessages";
+
+// IMPORTANT: Define all key variables in the webpage
 const display_name_of_role = "role";
 const display_name_of_role_user = "user";
 const display_name_of_role_ai = "assistant";
 const display_name_of_content = "content";
 
-// Zod form schema (ensures input isn't empty)
+// Create a constants object to pass to the hooks
+const constants = {
+    display_name_of_role,
+    display_name_of_role_user,
+    display_name_of_role_ai,
+    display_name_of_content,
+};
+
+// Define your Message interface (used throughout the page)
+export interface Message {
+    [display_name_of_role]: typeof display_name_of_role_user | string;
+    [display_name_of_content]: string;
+}
+
+// Zod form schema
 const formSchema = z.object({
     prompt: z.string().min(1, "Message cannot be empty"),
 });
 
-// Local message type matching your naming
-type Message = {
-    [display_name_of_role]: typeof display_name_of_role_user | typeof display_name_of_role_ai;
-    [display_name_of_content]: string;
-};
-
-// Component for rendering individual chat messages
+// Component for rendering individual chat messages (non-edit mode)
 const ChatMessage = ({ message }: { message: Message }) => (
     <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -53,38 +66,55 @@ const ChatMessage = ({ message }: { message: Message }) => (
 );
 
 const ConversationPage = () => {
-    // Our Socket.IO hook
-    const { messages: socketMessages, sendMessage } = useChatSocket();
-
-    // State for displayed messages
+    // Global hooks
+    const { messages: socketMessages, sendMessage } = useChatSocket<Message>(
+        constants.display_name_of_role,
+        constants.display_name_of_role_user,
+        constants.display_name_of_role_ai,
+        constants.display_name_of_content
+    );
+    // Conversation state
     const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
-    // Queue to hold pending AI messages
     const pendingMessages = useRef<string[]>([]);
+    const displayedMessageSet = useRef<Set<string>>(new Set());
+    const lastProcessedIndex = useRef(0);
 
-    // Custom hook for typing effect
+    // Typing effect hook (remains in place)
     const { typingText, isTyping, startTyping, skipTyping } = useTypingEffect(
         (text: string) => {
-            // onFinish callback when typing completes
+            const trimmedText = text.trim();
+            const messageKey = `${display_name_of_role_ai}-${trimmedText}`;
+            displayedMessageSet.current.add(messageKey);
             setDisplayMessages((prev) => [
                 ...prev,
-                { [display_name_of_role]: display_name_of_role_ai, [display_name_of_content]: text },
+                { [display_name_of_role]: display_name_of_role_ai, [display_name_of_content]: trimmedText },
             ]);
-            // Process next pending AI message if available
             if (pendingMessages.current.length > 0) {
                 const nextMessage = pendingMessages.current.shift();
                 if (nextMessage) startTyping(nextMessage);
             }
         },
-        50
+        5
     );
 
-    // Dropdown options and state for single-select
+    // Process incoming socket messages using the custom hook
+    useProcessSocketMessages<Message>({
+        socketMessages,
+        isTyping,
+        startTyping,
+        setDisplayMessages,
+        displayedMessageSet,
+        pendingMessages,
+        lastProcessedIndex,
+        constants,
+    });
+
+    // Dropdown state for single-select
     const namesOptions = ["Alice", "Bob", "Charlie", "Dave"];
     const [selectedName, setSelectedName] = useState<string | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -95,57 +125,60 @@ const ConversationPage = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    // Set up react-hook-form
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: { prompt: "" },
     });
 
-    // Scroll to bottom on new messages or typing updates
+    // Scroll to bottom when messages update
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [displayMessages, typingText]);
 
-    // Process incoming socket messages
-    useEffect(() => {
-        if (socketMessages.length === 0) return;
+    // Use custom hook for handling form submission
+    const onSubmit = useMessageSubmit<Message>({
+        sendMessage,
+        setDisplayMessages,
+        displayedMessageSet,
+        constants,
+    });
 
-        socketMessages.forEach((msg: { role: string; content: string }) => {
-            const alreadyInDisplay = displayMessages.some(
-                (dm) =>
-                    dm[display_name_of_role] === msg.role &&
-                    dm[display_name_of_content] === msg.content
-            );
-            const alreadyInQueue = pendingMessages.current.includes(msg.content);
+    // Use custom hook for editing actions (removed the generic parameter here)
+    const {
+        editingIndex,
+        editedContent,
+        setEditedContent,
+        handleEditClick,
+        cancelEditing,
+        resendEditedMessage,
+        updateAndPropagate,
+        isPropagating,
+    } = useMessageEditing({
+        displayMessages,
+        setDisplayMessages,
+        sendMessage,
+        displayedMessageSet,
+        constants,
+    });
 
-            if (!alreadyInDisplay && !alreadyInQueue) {
-                if (msg.role === display_name_of_role_ai) {
-                    if (isTyping) {
-                        // Queue the AI message if a typing effect is already in progress
-                        pendingMessages.current.push(msg.content);
-                    } else {
-                        startTyping(msg.content);
-                    }
+    // Helper: Wait until the typing effect has finished (i.e. assistant response is complete)
+    const waitForTypingToComplete = (): Promise<void> => {
+        return new Promise<void>((resolve) => {
+            const check = () => {
+                if (!isTyping) {
+                    resolve();
                 } else {
-                    // Add user messages directly
-                    setDisplayMessages((prev) => [
-                        ...prev,
-                        { [display_name_of_role]: display_name_of_role_user, [display_name_of_content]: msg.content },
-                    ]);
+                    setTimeout(check, 5);
                 }
-            }
+            };
+            check();
         });
-    }, [socketMessages, displayMessages, isTyping, startTyping]);
+    };
 
-    // Handle form submission
-    const onSubmit = (values: z.infer<typeof formSchema>) => {
-        const userMsg: Message = {
-            [display_name_of_role]: display_name_of_role_user,
-            [display_name_of_content]: values.prompt,
-        };
-        setDisplayMessages((prev) => [...prev, userMsg]);
-        sendMessage(values.prompt);
-        form.reset();
+    const updateAndPropagateHandler = async (index: number) => {
+        await updateAndPropagate(index, waitForTypingToComplete);
     };
 
     return (
@@ -161,9 +194,56 @@ const ConversationPage = () => {
 
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {displayMessages.map((message, index) => (
-                    <ChatMessage key={index} message={message} />
-                ))}
+                {displayMessages.map((message, index) => {
+                    if (
+                        message[display_name_of_role] === display_name_of_role_user &&
+                        editingIndex === index
+                    ) {
+                        return (
+                            <div key={`edit-${index}`} className="flex flex-col items-end">
+                                <div className="w-[40%] p-3 border border-gray-400 shadow-md">
+                                    <Input
+                                        value={editedContent}
+                                        onChange={(e) => setEditedContent(e.target.value)}
+                                        className="border rounded-lg px-4 py-2 focus:ring-0"
+                                        placeholder="Edit your message..."
+                                        aria-label="Edit your message"
+                                    />
+                                </div>
+                                <div className="flex gap-2 mt-2">
+                                    <Button variant="outline" onClick={cancelEditing}>
+                                        Cancel
+                                    </Button>
+                                    <Button onClick={() => resendEditedMessage(index)}>
+                                        Resend
+                                    </Button>
+                                    <Button onClick={() => updateAndPropagateHandler(index)}>
+                                        Update &amp; Propagate
+                                    </Button>
+                                </div>
+                            </div>
+                        );
+                    } else {
+                        return (
+                            <div key={`msg-${index}`} className="flex flex-col">
+                                <ChatMessage message={message} />
+                                {message[display_name_of_role] === display_name_of_role_user &&
+                                    editingIndex !== index && (
+                                        <Button
+                                            onClick={() =>
+                                                handleEditClick(index, message[display_name_of_content])
+                                            }
+                                            variant="link"
+                                            size="sm"
+                                            className="self-end"
+                                        >
+                                            Edit
+                                        </Button>
+                                    )}
+                            </div>
+                        );
+                    }
+                })}
                 {/* Typing Effect with Skip Option */}
                 {isTyping && (
                     <motion.div
@@ -190,7 +270,13 @@ const ConversationPage = () => {
             {/* Input Bar */}
             <div className="p-3 border-t bg-white sticky bottom-0">
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-2 items-center">
+                    <form
+                        onSubmit={form.handleSubmit((values) => {
+                            onSubmit(values);
+                            form.reset(); // Clear the input field after submission
+                        })}
+                        className="flex gap-2 items-center"
+                    >
                         <FormField
                             name="prompt"
                             render={({ field }) => (
@@ -237,7 +323,7 @@ const ConversationPage = () => {
                         <Button
                             type="submit"
                             className="px-6"
-                            disabled={isTyping || !selectedName}
+                            disabled={isTyping || isPropagating || !selectedName}
                             aria-label="Send message"
                         >
                             Send
